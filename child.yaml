@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: child-pv
+spec:
+  storageClassName: cloning
+  persistentVolumeReclaimPolicy: Recycle
+  accessModes:
+    - ReadWriteOnce
+  capacity:
+    storage: 100M
+  hostPath:
+    path: /tmp/pv.child
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: child-pvc
+  namespace: dev
+spec:
+  storageClassName: cloning
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100M
+  volumeName: child-pv
+  dataSource:
+    kind: PersistentVolumeClaim
+    name: main-pvc
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-child
+  namespace: dev
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 1 
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: pvc-check
+              mountPath: /home/check
+      volumes:
+        - name: pvc-check
+          persistentVolumeClaim:
+            claimName: child-pvc

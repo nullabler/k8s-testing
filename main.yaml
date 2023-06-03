@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: main-pv
+spec:
+  storageClassName: ""
+  persistentVolumeReclaimPolicy: Recycle
+  accessModes:
+    - ReadWriteOnce
+  capacity:
+    storage: 100M
+  hostPath:
+    path: /tmp/pv.main
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: main-pvc
+  namespace: dev
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100M
+  volumeName: main-pv
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: main-job
+  namespace: dev
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "1"
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      name: main-job
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: init
+          image: alpine/curl
+          command: 
+            - /bin/sh
+            - -c
+            - curl -o /home/load/100MB.bin https://speed.hetzner.de/100MB.bin
+          volumeMounts:
+            - name: pvc-load
+              mountPath: /home/load
+      volumes:
+        - name: pvc-load
+          persistentVolumeClaim:
+            claimName: main-pvc
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-main
+  namespace: dev
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 1 
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: pvc-main
+              mountPath: /home/main
+      volumes:
+        - name: pvc-main
+          persistentVolumeClaim:
+            claimName: main-pvc
